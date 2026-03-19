@@ -134,7 +134,7 @@ struct MenuBarView: View {
                     Circle()
                         .fill(.green.opacity(0.6))
                         .frame(width: 5, height: 5)
-                    Text("Updated \(lastUpdated, style: .relative) ago")
+                    Text("Updated \(formatTimeAgo(lastUpdated))")
                         .font(.system(size: 10))
                         .foregroundStyle(.quaternary)
                 }
@@ -197,6 +197,12 @@ struct MenuBarView: View {
         }
         .padding(24)
         .frame(width: 380, height: 260)
+    }
+
+    private func formatTimeAgo(_ date: Date) -> String {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .abbreviated
+        return formatter.localizedString(for: date, relativeTo: Date())
     }
 }
 

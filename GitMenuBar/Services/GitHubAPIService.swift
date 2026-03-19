@@ -41,7 +41,11 @@ actor GitHubAPIService {
     """
 
     func fetchPullRequests(token: String, filter: PRFilter) async throws -> [PullRequest] {
-        let searchQuery = "is:pr is:open \(filter.queryFragment)"
+        let cutoffDate = Calendar.current.date(byAdding: .day, value: -30, to: Date())!
+        let df = DateFormatter()
+        df.dateFormat = "yyyy-MM-dd"
+        let cutoffString = df.string(from: cutoffDate)
+        let searchQuery = "is:pr is:open created:>\(cutoffString) \(filter.queryFragment)"
 
         let body: [String: Any] = [
             "query": query,
@@ -109,8 +113,8 @@ actor GitHubAPIService {
 
         let fallbackFormatter = ISO8601DateFormatter()
 
-        func parseDate(_ string: String) -> Date {
-            dateFormatter.date(from: string) ?? fallbackFormatter.date(from: string) ?? Date()
+        func parseDate(_ string: String) -> Date? {
+            dateFormatter.date(from: string) ?? fallbackFormatter.date(from: string)
         }
 
         return nodes.compactMap { node -> PullRequest? in
@@ -151,14 +155,19 @@ actor GitHubAPIService {
                 }
             }
 
+            guard let createdAt = parseDate(createdAtStr),
+                  let updatedAt = parseDate(updatedAtStr) else {
+                return nil
+            }
+
             return PullRequest(
                 id: id,
                 number: number,
                 title: title,
                 url: url,
                 repositoryName: repoName,
-                createdAt: parseDate(createdAtStr),
-                updatedAt: parseDate(updatedAtStr),
+                createdAt: createdAt,
+                updatedAt: updatedAt,
                 isDraft: isDraft,
                 reviewDecision: reviewDecision,
                 ciStatus: ciStatus,
