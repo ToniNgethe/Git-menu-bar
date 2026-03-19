@@ -22,7 +22,7 @@ struct Label: Identifiable, Codable {
     let color: String
 }
 
-struct PullRequest: Identifiable {
+struct PullRequest: Identifiable, Codable {
     let id: String
     let number: Int
     let title: String
@@ -34,9 +34,20 @@ struct PullRequest: Identifiable {
     let reviewDecision: ReviewDecision
     let ciStatus: CIStatus
     let labels: [Label]
+    let authorLogin: String
+    let authorAvatarURL: URL?
+    let isMergeable: Bool?
+    let approvalCount: Int
+    let totalReviewerCount: Int
+
+    var reviewCountText: String? {
+        guard totalReviewerCount > 0 else { return nil }
+        return "\(approvalCount)/\(totalReviewerCount)"
+    }
 
     var statusColor: StatusColor {
         if isDraft { return .draft }
+        if isMergeable == false { return .conflict }
         switch reviewDecision {
         case .approved:
             return ciStatus == .failure || ciStatus == .error ? .failing : .approved
@@ -60,9 +71,16 @@ enum StatusColor {
     case changesRequested
     case failing
     case draft
+    case conflict
 }
 
-enum PRFilter: String, CaseIterable {
+enum PRSortOrder: String, CaseIterable {
+    case updatedDate
+    case createdDate
+    case repositoryName
+}
+
+enum PRFilter: String, CaseIterable, Codable {
     case reviewRequested = "Review Requested"
     case assigned = "Assigned"
     case created = "Created"
@@ -78,7 +96,7 @@ enum PRFilter: String, CaseIterable {
     var queryFragment: String {
         switch self {
         case .created: return "author:@me"
-        case .reviewRequested: return "review-requested:@me"
+        case .reviewRequested: return "involves:@me -author:@me"
         case .assigned: return "assignee:@me"
         }
     }

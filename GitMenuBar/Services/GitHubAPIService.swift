@@ -34,18 +34,18 @@ actor GitHubAPIService {
                 color
               }
             }
+            author { login avatarUrl }
+            mergeable
+            reviews(first: 20) { nodes { state author { login } } }
+            reviewRequests(first: 10) { totalCount }
           }
         }
       }
     }
     """
 
-    func fetchPullRequests(token: String, filter: PRFilter) async throws -> [PullRequest] {
-        let cutoffDate = Calendar.current.date(byAdding: .day, value: -30, to: Date())!
-        let df = DateFormatter()
-        df.dateFormat = "yyyy-MM-dd"
-        let cutoffString = df.string(from: cutoffDate)
-        let searchQuery = "is:pr is:open created:>\(cutoffString) \(filter.queryFragment)"
+    func fetchPullRequests(token: String, filter: PRFilter) async throws -> (prs: [PullRequest], rateLimitRemaining: Int?, rateLimitResetDate: Date?) {
+        let searchQuery = "is:pr is:open \(filter.queryFragment)"
 
         let body: [String: Any] = [
             "query": query,
@@ -64,14 +64,22 @@ actor GitHubAPIService {
             throw APIError.invalidResponse
         }
 
+        let rateLimitRemaining = httpResponse.value(forHTTPHeaderField: "X-RateLimit-Remaining").flatMap(Int.init)
+        let rateLimitReset = httpResponse.value(forHTTPHeaderField: "X-RateLimit-Reset")
+            .flatMap(TimeInterval.init)
+            .map { Date(timeIntervalSince1970: $0) }
+
         guard httpResponse.statusCode == 200 else {
             if httpResponse.statusCode == 401 {
                 throw APIError.unauthorized
             }
+            if httpResponse.statusCode == 403, rateLimitRemaining == 0 {
+                throw APIError.rateLimited(resetDate: rateLimitReset ?? Date().addingTimeInterval(60))
+            }
             throw APIError.httpError(httpResponse.statusCode)
         }
 
-        return try parseResponse(data)
+        return (try parseResponse(data), rateLimitRemaining, rateLimitReset)
     }
 
     func validateToken(_ token: String) async throws -> String {
@@ -155,6 +163,57 @@ actor GitHubAPIService {
                 }
             }
 
+            // Parse author
+            let authorObj = node["author"] as? [String: Any]
+            let authorLogin = authorObj?["login"] as? String ?? "unknown"
+            let authorAvatarURL: URL?
+            if let avatarStr = authorObj?["avatarUrl"] as? String {
+                authorAvatarURL = URL(string: avatarStr)
+            } else {
+                authorAvatarURL = nil
+            }
+
+            // Parse mergeable
+            let isMergeable: Bool?
+            if let mergeableStr = node["mergeable"] as? String {
+                switch mergeableStr {
+                case "MERGEABLE":
+                    isMergeable = true
+                case "CONFLICTING":
+                    isMergeable = false
+                default:
+                    isMergeable = nil
+                }
+            } else {
+                isMergeable = nil
+            }
+
+            // Parse reviews - count unique approved authors
+            var approvedLogins = Set<String>()
+            var allReviewerLogins = Set<String>()
+            if let reviewsObj = node["reviews"] as? [String: Any],
+               let reviewNodes = reviewsObj["nodes"] as? [[String: Any]] {
+                for reviewNode in reviewNodes {
+                    guard let state = reviewNode["state"] as? String,
+                          let reviewAuthor = reviewNode["author"] as? [String: Any],
+                          let login = reviewAuthor["login"] as? String else { continue }
+                    allReviewerLogins.insert(login)
+                    if state == "APPROVED" {
+                        approvedLogins.insert(login)
+                    }
+                }
+            }
+
+            // Parse reviewRequests for pending reviewers
+            var pendingReviewCount = 0
+            if let reviewRequests = node["reviewRequests"] as? [String: Any],
+               let totalCount = reviewRequests["totalCount"] as? Int {
+                pendingReviewCount = totalCount
+            }
+
+            let approvalCount = approvedLogins.count
+            let totalReviewerCount = allReviewerLogins.count + pendingReviewCount
+
             guard let createdAt = parseDate(createdAtStr),
                   let updatedAt = parseDate(updatedAtStr) else {
                 return nil
@@ -171,7 +230,12 @@ actor GitHubAPIService {
                 isDraft: isDraft,
                 reviewDecision: reviewDecision,
                 ciStatus: ciStatus,
-                labels: labels
+                labels: labels,
+                authorLogin: authorLogin,
+                authorAvatarURL: authorAvatarURL,
+                isMergeable: isMergeable,
+                approvalCount: approvalCount,
+                totalReviewerCount: totalReviewerCount
             )
         }
     }
@@ -184,6 +248,7 @@ enum APIError: LocalizedError {
     case httpError(Int)
     case parseError
     case graphQLError(String)
+    case rateLimited(resetDate: Date)
 
     var errorDescription: String? {
         switch self {
@@ -193,6 +258,11 @@ enum APIError: LocalizedError {
         case .httpError(let code): return "HTTP error \(code)"
         case .parseError: return "Failed to parse response"
         case .graphQLError(let msg): return msg
+        case .rateLimited(let resetDate):
+            let formatter = RelativeDateTimeFormatter()
+            formatter.unitsStyle = .abbreviated
+            let timeUntilReset = formatter.localizedString(for: resetDate, relativeTo: Date())
+            return "Rate limited by GitHub. Resets \(timeUntilReset)"
         }
     }
 }

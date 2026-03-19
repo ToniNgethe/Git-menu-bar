@@ -11,6 +11,7 @@ struct MenuBarView: View {
             } else {
                 headerView
                 filterBar
+                rateLimitBanner
                 contentView
                 footerView
             }
@@ -36,6 +37,50 @@ struct MenuBarView: View {
             Spacer()
 
             HStack(spacing: 2) {
+                // Mark all read
+                IconButton(icon: "eye") {
+                    viewModel.markAllAsRead()
+                }
+
+                // Sort menu
+                Menu {
+                    Button {
+                        viewModel.sortOrder = .updatedDate
+                    } label: {
+                        HStack {
+                            Text("Updated Date")
+                            if viewModel.sortOrder == .updatedDate { Image(systemName: "checkmark") }
+                        }
+                    }
+                    Button {
+                        viewModel.sortOrder = .createdDate
+                    } label: {
+                        HStack {
+                            Text("Created Date")
+                            if viewModel.sortOrder == .createdDate { Image(systemName: "checkmark") }
+                        }
+                    }
+                    Button {
+                        viewModel.sortOrder = .repositoryName
+                    } label: {
+                        HStack {
+                            Text("Repository")
+                            if viewModel.sortOrder == .repositoryName { Image(systemName: "checkmark") }
+                        }
+                    }
+                } label: {
+                    Image(systemName: "arrow.up.arrow.down")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 26, height: 26)
+                        .background(
+                            RoundedRectangle(cornerRadius: 6)
+                                .fill(Color.clear)
+                        )
+                }
+                .menuStyle(.borderlessButton)
+                .frame(width: 26, height: 26)
+
                 IconButton(icon: "arrow.clockwise", isSpinning: viewModel.isLoading) {
                     Task { await viewModel.refresh() }
                 }
@@ -71,13 +116,34 @@ struct MenuBarView: View {
         .padding(.bottom, 10)
     }
 
+    // MARK: - Rate Limit Banner
+
+    @ViewBuilder
+    private var rateLimitBanner: some View {
+        if let warning = viewModel.rateLimitWarning {
+            HStack(spacing: 6) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.orange)
+                Text(warning)
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 6)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.orange.opacity(0.08))
+        }
+    }
+
     // MARK: - Content
 
     private var contentView: some View {
         Group {
-            if viewModel.isLoading && viewModel.pullRequests.isEmpty {
+            if viewModel.isLoading && viewModel.displayedPullRequests.isEmpty {
                 loadingView
-            } else if let error = viewModel.errorMessage, viewModel.pullRequests.isEmpty {
+            } else if let error = viewModel.errorMessage, viewModel.displayedPullRequests.isEmpty {
                 EmptyStateView(
                     icon: "exclamationmark.triangle",
                     title: "Something went wrong",
@@ -85,7 +151,7 @@ struct MenuBarView: View {
                     action: { Task { await viewModel.refresh() } },
                     actionLabel: "Retry"
                 )
-            } else if viewModel.pullRequests.isEmpty {
+            } else if viewModel.displayedPullRequests.isEmpty {
                 EmptyStateView(
                     icon: "tray",
                     title: "No pull requests",
@@ -100,8 +166,11 @@ struct MenuBarView: View {
     private var prListView: some View {
         ScrollView {
             LazyVStack(spacing: 2) {
-                ForEach(viewModel.pullRequests) { pr in
-                    PRRowView(pr: pr) {
+                ForEach(viewModel.displayedPullRequests) { pr in
+                    PRRowView(
+                        pr: pr,
+                        isRead: viewModel.readStateService.isRead(pr.id)
+                    ) {
                         viewModel.openPR(pr)
                     }
                 }

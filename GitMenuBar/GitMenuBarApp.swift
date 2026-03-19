@@ -3,10 +3,14 @@ import SwiftUI
 @main
 struct GitMenuBarApp: App {
     @StateObject private var viewModel = PRListViewModel()
+    @StateObject private var appSettings = AppSettings()
 
     var body: some Scene {
         MenuBarExtra {
             MenuBarView(viewModel: viewModel)
+                .onAppear {
+                    viewModel.configure(settings: appSettings)
+                }
         } label: {
             HStack(spacing: 3) {
                 Image(systemName: "arrow.triangle.pull")
@@ -23,6 +27,7 @@ struct GitMenuBarApp: App {
         Settings {
             SettingsView()
                 .environmentObject(viewModel)
+                .environmentObject(appSettings)
         }
     }
 }

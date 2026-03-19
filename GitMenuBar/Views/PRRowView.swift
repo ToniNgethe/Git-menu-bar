@@ -2,6 +2,7 @@ import SwiftUI
 
 struct PRRowView: View {
     let pr: PullRequest
+    var isRead: Bool = false
     let onTap: () -> Void
 
     @State private var isHovered = false
@@ -15,10 +16,28 @@ struct PRRowView: View {
 
                 // Content
                 VStack(alignment: .leading, spacing: 3) {
-                    // Repo + time
+                    // Repo + author + time
                     HStack {
                         Text(pr.repositoryName.components(separatedBy: "/").last ?? pr.repositoryName)
                             .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+
+                        // Author avatar and login
+                        AsyncImage(url: pr.authorAvatarURL) { image in
+                            image
+                                .resizable()
+                                .scaledToFill()
+                        } placeholder: {
+                            Image(systemName: "person.circle.fill")
+                                .resizable()
+                                .foregroundStyle(.quaternary)
+                        }
+                        .frame(width: 14, height: 14)
+                        .clipShape(Circle())
+
+                        Text(pr.authorLogin)
+                            .font(.system(size: 10))
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
 
@@ -46,6 +65,10 @@ struct PRRowView: View {
 
                         ciBadge
 
+                        if pr.isMergeable == false {
+                            StatusBadge(text: "Conflict", icon: "exclamationmark.triangle", color: .red)
+                        }
+
                         if !pr.labels.isEmpty {
                             ForEach(pr.labels.prefix(2)) { label in
                                 LabelPill(label: label)
@@ -68,11 +91,21 @@ struct PRRowView: View {
                     .fill(isHovered ? Color.primary.opacity(0.04) : Color.clear)
             )
             .contentShape(Rectangle())
+            .opacity(isRead ? 0.5 : 1.0)
         }
         .buttonStyle(.plain)
         .onHover { hovering in
             withAnimation(.easeOut(duration: 0.12)) {
                 isHovered = hovering
+            }
+        }
+        .contextMenu {
+            Button("Copy Link") {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(pr.url.absoluteString, forType: .string)
+            }
+            Button("Open in Browser") {
+                onTap()
             }
         }
     }
@@ -97,6 +130,7 @@ struct PRRowView: View {
         case .changesRequested: return .red
         case .failing: return .red
         case .draft: return .gray
+        case .conflict: return .purple
         }
     }
 
@@ -106,11 +140,23 @@ struct PRRowView: View {
     private var reviewBadge: some View {
         switch pr.reviewDecision {
         case .approved:
-            StatusBadge(text: "Approved", color: .green)
+            if let countText = pr.reviewCountText {
+                StatusBadge(text: "\(countText) Approved", color: .green)
+            } else {
+                StatusBadge(text: "Approved", color: .green)
+            }
         case .changesRequested:
-            StatusBadge(text: "Changes", color: .red)
+            if let countText = pr.reviewCountText {
+                StatusBadge(text: "\(countText) Changes", color: .red)
+            } else {
+                StatusBadge(text: "Changes", color: .red)
+            }
         case .reviewRequired:
-            StatusBadge(text: "Review", color: .orange)
+            if let countText = pr.reviewCountText {
+                StatusBadge(text: "\(countText) Review", color: .orange)
+            } else {
+                StatusBadge(text: "Review", color: .orange)
+            }
         case .none:
             EmptyView()
         }

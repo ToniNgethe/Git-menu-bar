@@ -3,6 +3,7 @@ import ServiceManagement
 
 struct SettingsView: View {
     @EnvironmentObject var viewModel: PRListViewModel
+    @EnvironmentObject var appSettings: AppSettings
     @State private var tokenInput = ""
     @State private var isSaving = false
     @State private var showToken = false
@@ -22,12 +23,30 @@ struct SettingsView: View {
 
             Section {
                 LaunchAtLoginToggle()
+
+                Picker("Refresh interval", selection: $appSettings.refreshInterval) {
+                    Text("30 seconds").tag(TimeInterval(30))
+                    Text("1 minute").tag(TimeInterval(60))
+                    Text("2 minutes").tag(TimeInterval(120))
+                    Text("5 minutes").tag(TimeInterval(300))
+                }
+
+                Picker("Max PR age", selection: $appSettings.maxAgeDays) {
+                    Text("1 week").tag(7)
+                    Text("2 weeks").tag(14)
+                    Text("1 month").tag(30)
+                    Text("2 months").tag(60)
+                    Text("3 months").tag(90)
+                    Text("No limit").tag(0)
+                }
+
+                Toggle("Notifications", isOn: $appSettings.notificationsEnabled)
             } header: {
                 Text("General")
             }
         }
         .formStyle(.grouped)
-        .frame(width: 400, height: 280)
+        .frame(width: 400, height: 420)
     }
 
     private var authenticatedView: some View {
