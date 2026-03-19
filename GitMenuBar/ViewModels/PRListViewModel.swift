@@ -41,8 +41,12 @@ class PRListViewModel: ObservableObject {
 
         do {
             let cutoffDate = Calendar.current.date(byAdding: .day, value: -30, to: Date())!
-            pullRequests = try await apiService.fetchPullRequests(token: token, filter: selectedFilter)
+            var results = try await apiService.fetchPullRequests(token: token, filter: selectedFilter)
                 .filter { $0.createdAt > cutoffDate && $0.updatedAt > cutoffDate }
+            if selectedFilter == .assigned {
+                results = results.filter { $0.reviewDecision != .approved }
+            }
+            pullRequests = results
             lastUpdated = Date()
         } catch let error as APIError {
             if case .unauthorized = error {
