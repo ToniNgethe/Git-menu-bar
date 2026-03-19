@@ -85,6 +85,8 @@ class PRListViewModel: ObservableObject {
     }
 
     func openPR(_ pr: PullRequest) {
+        guard pr.url.scheme == "https",
+              pr.url.host?.hasSuffix("github.com") == true else { return }
         NSWorkspace.shared.open(pr.url)
     }
 

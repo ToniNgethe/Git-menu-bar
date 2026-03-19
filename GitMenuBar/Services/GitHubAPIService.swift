@@ -80,6 +80,13 @@ actor GitHubAPIService {
             throw APIError.unauthorized
         }
 
+        // Validate required scope
+        let scopes = httpResponse.value(forHTTPHeaderField: "X-OAuth-Scopes") ?? ""
+        let scopeList = scopes.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+        guard scopeList.contains("repo") else {
+            throw APIError.insufficientScopes
+        }
+
         let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
         return json?["login"] as? String ?? "Unknown"
     }
@@ -164,6 +171,7 @@ actor GitHubAPIService {
 enum APIError: LocalizedError {
     case invalidResponse
     case unauthorized
+    case insufficientScopes
     case httpError(Int)
     case parseError
     case graphQLError(String)
@@ -172,6 +180,7 @@ enum APIError: LocalizedError {
         switch self {
         case .invalidResponse: return "Invalid response from GitHub"
         case .unauthorized: return "Invalid or expired token"
+        case .insufficientScopes: return "Token is missing the required 'repo' scope"
         case .httpError(let code): return "HTTP error \(code)"
         case .parseError: return "Failed to parse response"
         case .graphQLError(let msg): return msg
