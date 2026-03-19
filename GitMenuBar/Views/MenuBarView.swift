@@ -37,9 +37,9 @@ struct MenuBarView: View {
             Spacer()
 
             HStack(spacing: 2) {
-                // Mark all read
-                IconButton(icon: "eye") {
-                    viewModel.markAllAsRead()
+                // Toggle read state
+                IconButton(icon: viewModel.allRead ? "eye.slash" : "eye") {
+                    viewModel.toggleAllRead()
                 }
 
                 // Sort menu

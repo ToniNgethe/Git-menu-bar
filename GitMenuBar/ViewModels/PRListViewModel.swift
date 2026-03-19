@@ -194,9 +194,17 @@ class PRListViewModel: ObservableObject {
         NSWorkspace.shared.open(pr.url)
     }
 
-    func markAllAsRead() {
-        for pr in pullRequests {
-            readStateService.markAsRead(pr.id)
+    var allRead: Bool {
+        pullRequests.allSatisfy { readStateService.isRead($0.id) }
+    }
+
+    func toggleAllRead() {
+        if allRead {
+            readStateService.clearAll()
+        } else {
+            for pr in pullRequests {
+                readStateService.markAsRead(pr.id)
+            }
         }
         objectWillChange.send()
     }
