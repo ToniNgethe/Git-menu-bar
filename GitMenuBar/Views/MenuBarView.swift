@@ -137,6 +137,31 @@ struct MenuBarView: View {
         }
     }
 
+    private func errorBanner(message: String) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 10))
+                .foregroundStyle(.red)
+            Text(message)
+                .font(.system(size: 10))
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+            Spacer()
+            Button {
+                Task { await viewModel.refresh() }
+            } label: {
+                Text("Retry")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(.red)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 6)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.red.opacity(0.08))
+    }
+
     // MARK: - Content
 
     private var contentView: some View {
@@ -158,9 +183,21 @@ struct MenuBarView: View {
                     subtitle: "Nothing here right now"
                 )
             } else {
+                if let error = viewModel.errorMessage {
+                    errorBanner(message: error)
+                }
                 prListView
             }
         }
+    }
+
+    private var dynamicListHeight: CGFloat {
+        let rowHeight: CGFloat = 72
+        let listPadding: CGFloat = 8
+        let computed = CGFloat(viewModel.displayedPullRequests.count) * rowHeight + listPadding
+        let minHeight: CGFloat = 120
+        let maxHeight: CGFloat = 600
+        return min(max(computed, minHeight), maxHeight)
     }
 
     private var prListView: some View {
@@ -178,7 +215,7 @@ struct MenuBarView: View {
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
         }
-        .frame(maxHeight: 420)
+        .frame(height: dynamicListHeight)
     }
 
     private var loadingView: some View {
